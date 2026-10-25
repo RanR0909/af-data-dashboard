@@ -2,7 +2,7 @@
   'use strict';
   var gate = document.getElementById('gate'), workspace = document.getElementById('workspace'), form = document.getElementById('unlock-form');
   var input = document.getElementById('password'), message = document.getElementById('message'), submit = document.getElementById('submit');
-  var refresh = document.getElementById('new-version'), frame = null, objectURL = null, password = null, version = null, pending = null;
+  var refresh = document.getElementById('new-version'), frame = null, objectURL = null, password = null, version = null, pending = null, currentManifest = null, exporting = false;
   function bytes(text) { return Uint8Array.from(atob(text), function (char) { return char.charCodeAt(0); }); }
   function hex(data) { return Array.from(new Uint8Array(data)).map(function (byte) { return byte.toString(16).padStart(2, '0'); }).join(''); }
   function validHash(hash) { return /^#\/[a-z]+(?:\?[^\r\n]*)?$/.test(hash) && hash.length <= 12000 ? hash : '#/today'; }
@@ -14,7 +14,8 @@
         item.file !== 'snapshot.bin' || !/^[a-f0-9]{64}$/.test(item.sha256) || bytes(item.salt).length !== 16 || bytes(item.iv).length !== 12) throw new Error('format');
     return item;
   }
-  async function decrypt(item, secret) {
+  async function decryptPayload(item, secret) {
+    if (!item || !['snapshot.bin', 'source-reports.bin'].includes(item.file) || item.format !== 1 || item.cipher !== 'AES-256-GCM' || item.kdf !== 'PBKDF2-SHA256' || item.iterations !== 600000 || !/^[a-f0-9]{64}$/.test(item.sha256) || bytes(item.salt).length !== 16 || bytes(item.iv).length !== 12) throw new Error('format');
     var response = await fetch(item.file + '?v=' + item.sha256, { cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
     if (!response.ok) throw new Error('network');
     var encrypted = await response.arrayBuffer();
@@ -24,7 +25,10 @@
     var compressed;
     try { compressed = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(item.iv), tagLength: 128, additionalData: new TextEncoder().encode('AF-DASHBOARD-V1') }, key, encrypted); }
     catch (error) { throw new Error('password'); }
-    var html = await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+    return new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  }
+  async function decrypt(item, secret) {
+    var html = new TextDecoder().decode(await decryptPayload(item, secret));
     if (!html.startsWith('<!doctype html>') || !html.includes('af-encrypted-snapshot-v1')) throw new Error('format');
     return html;
   }
@@ -35,12 +39,12 @@
     var next = document.createElement('iframe'); next.title = 'AF 数据看板';
     next.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-downloads allow-popups');
     next.src = objectURL + hash;
-    workspace.replaceChildren(next); frame = next; version = item.sha256; pending = null;
+    workspace.replaceChildren(next); frame = next; version = item.sha256; pending = null; currentManifest = item;
     workspace.hidden = false; gate.hidden = true; refresh.hidden = true;
     if (previous) URL.revokeObjectURL(previous);
   }
   function lock() {
-    workspace.replaceChildren(); frame = null; password = null; version = null; pending = null;
+    workspace.replaceChildren(); frame = null; password = null; version = null; pending = null; currentManifest = null;
     if (objectURL) URL.revokeObjectURL(objectURL); objectURL = null;
     workspace.hidden = true; gate.hidden = false; refresh.hidden = true; input.value = ''; message.textContent = ''; input.focus();
   }
@@ -64,7 +68,26 @@
     if (!frame || event.source !== frame.contentWindow || event.origin !== location.origin || !event.data) return;
     if (event.data.type === 'af-host-lock') lock();
     if (event.data.type === 'af-host-route') history.replaceState(null, '', location.pathname + location.search + validHash(event.data.hash || ''));
+    if (event.data.type === 'af-source-export') exportSources();
   });
+  async function exportSources() {
+    if (exporting || !frame || !password) return;
+    var owner = frame, source = currentManifest && currentManifest.source_bundle, downloadURL = null;
+    exporting = true;
+    function report(text) { if (frame === owner) owner.contentWindow.postMessage({ type: 'af-source-export-status', text: text }, location.origin); }
+    try {
+      if (!source || source.file !== 'source-reports.bin') throw new Error('format');
+      report('正在下载并解密完整原表，请稍候…');
+      var zip = await decryptPayload(source, password);
+      if (frame !== owner || !password) return;
+      var prefix = new Uint8Array(zip, 0, 4);
+      if (prefix[0] !== 80 || prefix[1] !== 75) throw new Error('format');
+      downloadURL = URL.createObjectURL(new Blob([zip], { type: 'application/zip' }));
+      var link = document.createElement('a'); link.href = downloadURL; link.download = 'AF_原始报表_' + currentManifest.published_at.slice(0, 10) + '.zip'; document.body.appendChild(link); link.click(); link.remove();
+      report('完整原始报表已下载；请仅在授权范围内保存和分享。');
+    } catch (error) { report('原表下载未完成。' + friendly(error)); }
+    finally { if (downloadURL) setTimeout(function () { URL.revokeObjectURL(downloadURL); }, 30000); exporting = false; }
+  }
   refresh.addEventListener('click', async function () {
     refresh.disabled = true;
     try { var item = pending || await manifest(), html = await decrypt(item, password); show(html, item); }

@@ -32,15 +32,16 @@ jobs:
           [[ "$RELEASE_TAG" =~ ^snapshot-[0-9]{8}T[0-9]{6}Z-[a-f0-9]{8}$ ]]
           mkdir site
           cp index.html gate.css gate.js robots.txt .nojekyll site/
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern manifest.json --pattern snapshot.bin --dir site
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern manifest.json --pattern snapshot.bin --pattern source-reports.bin --dir site
           node - <<'JS'
           const fs=require('node:fs'),crypto=require('node:crypto');
-          const allowed=['.nojekyll','gate.css','gate.js','index.html','manifest.json','robots.txt','snapshot.bin'];
+          const allowed=['.nojekyll','gate.css','gate.js','index.html','manifest.json','robots.txt','snapshot.bin','source-reports.bin'];
           if(JSON.stringify(fs.readdirSync('site').sort())!==JSON.stringify(allowed.sort()))throw Error('Unexpected public file');
           const m=JSON.parse(fs.readFileSync('site/manifest.json','utf8'));
           if(m.format!==1||m.cipher!=='AES-256-GCM'||m.kdf!=='PBKDF2-SHA256'||m.iterations!==600000||m.file!=='snapshot.bin')throw Error('Unencrypted or unsupported snapshot');
           if(crypto.createHash('sha256').update(fs.readFileSync('site/snapshot.bin')).digest('hex')!==m.sha256)throw Error('Snapshot integrity failure');
-          for(const f of allowed.filter(x=>x!=='snapshot.bin'))if(/window\.AF_DATA|window\.AF_BRAND_MONTHLY|refresh_token|client_secret|PRIVATE KEY/.test(fs.readFileSync('site/'+f,'utf8')))throw Error('Sensitive content');
+          if(!m.source_bundle||m.source_bundle.file!=='source-reports.bin'||crypto.createHash('sha256').update(fs.readFileSync('site/source-reports.bin')).digest('hex')!==m.source_bundle.sha256)throw Error('Source bundle integrity failure');
+          for(const f of allowed.filter(x=>!x.endsWith('.bin')))if(/window\.AF_DATA|window\.AF_BRAND_MONTHLY|refresh_token|client_secret|PRIVATE KEY/.test(fs.readFileSync('site/'+f,'utf8')))throw Error('Sensitive content');
           JS
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b

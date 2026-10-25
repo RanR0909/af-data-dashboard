@@ -10,4 +10,4 @@ Data collection runs on the maintainer's configured computer, not on GitHub Page
 
 The repository does not offer shared web uploads. The maintainer periodically imports reports and publishes a new encrypted snapshot. Browser-local changes do not update other viewers.
 
-Snapshots use AES-256-GCM with a fresh random salt and nonce, PBKDF2-HMAC-SHA256 (600,000 iterations), and a cryptographically random 256-bit access password. The access password and collection credentials are kept off GitHub. Never replace the generated password with a short memorable password.
+Snapshots use AES-256-GCM with a fresh random salt and nonce and PBKDF2-HMAC-SHA256 (600,000 iterations). The shared access password is chosen by the maintainer and kept off GitHub with the collection credentials. A long random password is strongly recommended: a short or predictable password permits offline guessing of the publicly downloadable ciphertext. This viewer is not server-side authentication.
