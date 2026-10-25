@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-src blob:; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'">
+  <title>AF 数据看板</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="gate.css">
+</head>
+<body>
+  <main id="gate">
+    <div class="brand"><span>AF</span> 数据看板</div>
+    <section class="unlock" aria-labelledby="title">
+      <p class="eyebrow">加密共享面板</p>
+      <h1 id="title">查看团队数据</h1>
+      <p class="intro">输入单独收到的访问密码，解锁当前面板。</p>
+      <form id="unlock-form">
+        <label for="password">访问密码</label>
+        <div class="password-field">
+          <input id="password" type="password" autocomplete="current-password" required spellcheck="false" autocapitalize="none" aria-describedby="hint message">
+          <button id="show-password" type="button" aria-label="显示访问密码" aria-pressed="false">显示</button>
+        </div>
+        <button id="submit" type="submit">解锁面板</button>
+        <p id="message" role="status" aria-live="polite"></p>
+      </form>
+      <p id="hint" class="hint">密码只用于本次浏览器解锁，不会写入网址或发送至服务器。关闭或刷新网页后需重新输入。</p>
+    </section>
+    <footer>访问密码请向面板维护人获取，请勿公开转发。</footer>
+  </main>
+  <div id="workspace" hidden></div>
+  <button id="new-version" type="button" hidden>有新版数据，点击更新</button>
+  <div id="notice" role="status" hidden></div>
+  <noscript>请启用 JavaScript 后查看加密面板。</noscript>
+  <script src="gate.js"></script>
+</body>
+</html>
