@@ -69,7 +69,21 @@
     if (event.data.type === 'af-host-lock') lock();
     if (event.data.type === 'af-host-route') history.replaceState(null, '', location.pathname + location.search + validHash(event.data.hash || ''));
     if (event.data.type === 'af-source-export') exportSources();
+    if (event.data.type === 'af-report-request' && typeof event.data.id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(event.data.id)) sendReportData(event.data.id);
   });
+  async function sendReportData(id) {
+    var owner = frame;
+    try {
+      owner.contentWindow.postMessage({ type: 'af-report-ready', id: id }, location.origin);
+      var source = currentManifest && currentManifest.source_bundle;
+      if (!source || source.file !== 'source-reports.bin') throw new Error('format');
+      var zip = await decryptPayload(source, password);
+      if (frame !== owner || !password) return;
+      owner.contentWindow.postMessage({ type: 'af-report-data', id: id, buffer: zip }, location.origin, [zip]);
+    } catch (error) {
+      if (frame === owner) owner.contentWindow.postMessage({ type: 'af-report-data', id: id, error: friendly(error) }, location.origin);
+    }
+  }
   async function exportSources() {
     if (exporting || !frame || !password) return;
     var owner = frame, source = currentManifest && currentManifest.source_bundle, downloadURL = null;
